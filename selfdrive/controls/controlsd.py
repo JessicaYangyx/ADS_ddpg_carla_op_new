@@ -199,7 +199,9 @@ class Controls:
       # under 7% of space free no enable allowed
       self.events.add(EventName.outOfSpace)
     # TODO: make tici threshold the same
-    if self.sm['deviceState'].memoryUsagePercent > (90 if TICI else 65) and not SIMULATION:
+    #if self.sm['deviceState'].memoryUsagePercent > (90 if TICI else 65) and not SIMULATION:
+    # print("memory usage percent: ", self.sm['deviceState'].memoryUsagePercent)
+    if self.sm['deviceState'].memoryUsagePercent > 95:
       self.events.add(EventName.lowMemory)
     cpus = list(self.sm['deviceState'].cpuUsagePercent)[:(-1 if EON else None)]
     if max(cpus, default=0) > 95 and not SIMULATION:
