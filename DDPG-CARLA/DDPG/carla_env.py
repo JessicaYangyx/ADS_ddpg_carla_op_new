@@ -1,3 +1,4 @@
+import array
 import glob
 import os
 import sys
@@ -121,7 +122,7 @@ class CarEnv:
 
 
 
-    def reset(self):
+    def reset(self, lane_line):
         self.tm = time.time()
         self.dif_tm = 0
         global acum
@@ -273,7 +274,7 @@ class CarEnv:
         else:
             im = cv2.resize(self.front_camera, (settings.IM_WIDTH_CNN, settings.IM_HEIGHT_CNN))
 
-            wp_state, _ = self.transform2local(im)
+            wp_state, _ = self.transform2local(im, lane_line)
             return im, wp_state
 
 
@@ -378,7 +379,7 @@ class CarEnv:
         #     self.bev_camera = cv2.warpPerspective(i3, self.M, (settings.IM_WIDTH_VISUALIZATION, settings.IM_HEIGHT_VISUALIZATION))
 
 
-    def step(self, action):
+    def step(self, action, lane_line):
         global x_prev
         global y_prev
         global acum
@@ -445,7 +446,7 @@ class CarEnv:
         # OUTPUT USED BY THE REST OF THE PROGRAMS
         else:
             im = cv2.resize(self.front_camera, (settings.IM_WIDTH_CNN, settings.IM_HEIGHT_CNN))
-            next, exit_flag = self.transform2local(im)
+            next, exit_flag = self.transform2local(im, lane_line)
 
             # im_crop = self.front_camera[412:, 354:788]
             # cv2.namedWindow('Crop', cv2.WINDOW_AUTOSIZE)
@@ -636,7 +637,7 @@ class CarEnv:
         return state
 
 
-    def transform2local(self, im):
+    def transform2local(self, im, lane_line):
         state = np.zeros((settings.dimension_vector_estado,))
         actual_pos = self.vehicle.get_transform()
         yaw_c = actual_pos.rotation.yaw*math.pi/180 - math.pi/2
@@ -644,6 +645,17 @@ class CarEnv:
         Xc = actual_pos.location.x
         Yc = actual_pos.location.y
         Zc = actual_pos.location.z
+
+        xLeftLine = []
+        yLeftLine = []
+        xRightLine = []
+        yRightLine = []
+
+        if not lane_line is None:
+          xLeftLine = lane_line['xLeftLine']
+          yLeftLine = lane_line['yLeftLine']
+          xRightLine = lane_line['xRightLine']
+          yRightLine = lane_line['yRightLine']
         # print('Pc :', Xc, ' ', Yc, ' ', Zc)
         self.waypoints_current_plan[-1] = [actual_pos.location.x, actual_pos.location.y, actual_pos.location.z,
                                            actual_pos.rotation.pitch, actual_pos.rotation.yaw,
@@ -786,5 +798,12 @@ class CarEnv:
             state[0:(settings.dimension_vector_estado - 1)] = next15[:, 0]/10
             state[settings.dimension_vector_estado - 1] = self.angle_rw/ np.pi
             # state[settings.dimension_vector_estado - 1] = self.trackpos_rw
+
+            # append lane lines info to state
+            if len(xLeftLine) > settings.dimension_vector_estado:
+              state = np.concatenate([state, xLeftLine[0:(settings.dimension_vector_estado - 1)], yLeftLine[0:(settings.dimension_vector_estado - 1)], xRightLine[0:(settings.dimension_vector_estado - 1)], yRightLine[0:(settings.dimension_vector_estado - 1)]])
+            else:
+              zero_list = [0] * (settings.dimension_vector_estado - 1)
+              state = np.concatenate([state, zero_list, zero_list, zero_list, zero_list])
 
             return state, exit_flag

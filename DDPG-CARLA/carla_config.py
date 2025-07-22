@@ -95,7 +95,7 @@ if WORKING_MODE == WORKING_MODE_OPTIONS[0]: # WAYPOINTS_CARLA
         state_dim = 31
         dimension_vector_estado = state_dim
     elif WAYPOINTS == 'X':
-        state_dim = 16
+        state_dim = 76
 elif WORKING_MODE == WORKING_MODE_OPTIONS[1]: # WAYPOINTS_IMAGE
     DRAW_TRAJECTORY = 1
     state_dim = 17
