@@ -78,22 +78,17 @@ def play(train_indicator, q: Any):
 
     tf.compat.v1.keras.backend.set_session(tf_session)
 
-    print("yyx debug ddpg --- q is empty: ", q.empty())
     while not q.empty():
       message = q.get()
       print("receive lane lines from op: ", message)
 
 
-    print("yyx test 1 --- working mode: ", settings.WORKING_MODE)
     if settings.WORKING_MODE == settings.WORKING_MODE_OPTIONS[0] or settings.WORKING_MODE == settings.WORKING_MODE_OPTIONS[1]\
             or settings.WORKING_MODE == settings.WORKING_MODE_OPTIONS[7] or settings.WORKING_MODE == settings.WORKING_MODE_OPTIONS[8]:
-        print("yyx test 1.1##########")
         actor = ActorNetwork(tf_session=tf_session, state_size=settings.state_dim, action_size=3,
                              tau=settings.tau, lr=settings.lra)
-        print("yyx test 1.2#######")
         critic = CriticNetwork(tf_session=tf_session, state_size=settings.state_dim, action_size=3,
                                tau=settings.tau, lr=settings.lrc)
-        print("yyx test 1.3#######")
     else:
         actor = ActorNetwork_CNN(tf_session=tf_session, tau=settings.tau, lr=settings.lra)
         critic = CriticNetwork_CNN(tf_session=tf_session, tau=settings.tau, lr=settings.lrc)
@@ -101,7 +96,6 @@ def play(train_indicator, q: Any):
     buffer = ReplayBuffer(settings.buffer_size)
 
     env = CarEnv()
-    print("yyx test 2###########################")
 
     # noise function for exploration
     # ou = OrnsteinUhlenbeckActionNoise(mu=np.zeros(action_dim), sigma=ou_sigma * np.ones(action_dim))
