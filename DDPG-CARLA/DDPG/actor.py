@@ -2,7 +2,7 @@ import keras.backend as keras_backend
 import tensorflow as tf
 # tf.compat.v1.disable_eager_execution()
 from keras.initializers import normal
-from keras.layers import Dense, Input
+from keras.layers import Dense, Input, Add
 from keras.models import Model
 from carla_config import hidden_units, image_network
 from tensorflow import optimizers
@@ -57,13 +57,33 @@ class ActorNetwork:
         self.target_model.set_weights(target_weights)
 
     def generate_model(self):
+        # input_layer_for_boundary = tf.keras.layers.Input(shape=[60])
+        # h0_for_boundary = tf.keras.layers.Dense(24, activation="relu")(input_layer_for_boundary)
+        # h1_for_boundary = tf.keras.layers.Dense(8, activation="relu")(h0_for_boundary)
+        #
+        # input_layer_for_wp = tf.keras.layers.Input(shape=[16])
+        # h0_for_wp = tf.keras.layers.Dense(hidden_units[0], activation="relu")(input_layer_for_wp)
+        # h1_for_wp = tf.keras.layers.Dense(hidden_units[1], activation="relu")(h0_for_wp)
+        #
+        # merged = Add(name='merge')([h1_for_wp, h1_for_boundary])
+        # merged_h1 = Dense(hidden_units[1], activation="relu")(merged)
+        # output_layer = Dense(2, activation="tanh")(merged_h1)
+        # model = tf.keras.Model(inputs=[input_layer_for_wp, input_layer_for_boundary], outputs=output_layer)
+        # tf.keras.utils.plot_model(model,
+        #                           to_file=image_network + 'actor_model_WP_Carla_new.png',
+        #                           show_shapes=True,
+        #                           show_layer_names=True, rankdir='TB')
+        # return model, [input_layer_for_wp, input_layer_for_boundary]
+
         input_layer = tf.keras.layers.Input(shape=[self.state_size])
-        h0 = tf.keras.layers.Dense(hidden_units[0], activation="relu")(input_layer)
+        prev_h0 = tf.keras.layers.Dense(24, activation="relu")(input_layer)
+        prev_h1 = tf.keras.layers.Dense(8, activation="relu")(prev_h0)
+        h0 = tf.keras.layers.Dense(hidden_units[0], activation="relu")(prev_h1)
         h1 = tf.keras.layers.Dense(hidden_units[1], activation="relu")(h0)
-        output_layer = tf.compat.v1.keras.layers.Dense(3, activation="tanh")(h1)
+        output_layer = tf.compat.v1.keras.layers.Dense(2, activation="tanh")(h1)
         model = tf.keras.Model(inputs=input_layer, outputs=output_layer)
         tf.keras.utils.plot_model(model,
-                                  to_file=image_network + 'actor_model_WP_Carla.png',
+                                  to_file=image_network + 'actor_model_WP_Carla_new.png',
                                   show_shapes=True,
                                   show_layer_names=True, rankdir='TB')
 

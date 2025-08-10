@@ -54,7 +54,9 @@ class CriticNetwork:
 
     def generate_model(self):
         state_input = Input(shape=[self.state_size])
-        state_h1 = Dense(hidden_units[0], activation="relu")(state_input)
+        prev_h0 = tf.keras.layers.Dense(24, activation="relu")(state_input)
+        prev_h1 = tf.keras.layers.Dense(8, activation="relu")(prev_h0)
+        state_h1 = Dense(hidden_units[0], activation="relu")(prev_h1)
         state_h2 = Dense(hidden_units[1], activation="linear")(state_h1)
 
         action_input = Input(shape=[self.action_size])

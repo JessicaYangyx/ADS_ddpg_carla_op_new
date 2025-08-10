@@ -178,50 +178,59 @@ class CarEnv:
                 self.ind = 1
 
         #############NUEVO
-        if settings.TRAIN_MODE == settings.TRAIN_MODE_OPTIONS[0]:
-            spawn_points = self.map.get_spawn_points()
-            self.waypoints_current_plan = []
-            # while self.d2goal > 200 or self.d2goal < 180:
-            while self.d2goal < 2000 and self.dif_angle_routes == 0:
-                self.pos_a = random.choice(spawn_points)
-                self.pos_b = random.choice(spawn_points)
-                angles_dif = abs(abs(self.pos_a.rotation.yaw) - abs(self.pos_b.rotation.yaw))
-                if angles_dif > 80 and angles_dif < 100:
-                    self.dif_angle_routes = 1
+        while True:
+          try:
+            if settings.TRAIN_MODE == settings.TRAIN_MODE_OPTIONS[0]:
+                spawn_points = self.map.get_spawn_points()
+                print("spawn points size: ", len(spawn_points))
+                self.waypoints_current_plan = []
+                self.d2goal = 1
+                self.dif_angle_routes = 0
+                # while self.d2goal > 200 or self.d2goal < 180:
+                while self.d2goal < 2000 and self.dif_angle_routes == 0:
+                    random.seed(time.time())
+                    self.pos_a = random.choice(spawn_points)
+                    self.pos_b = random.choice(spawn_points)
+                    angles_dif = abs(abs(self.pos_a.rotation.yaw) - abs(self.pos_b.rotation.yaw))
+                    if angles_dif > 80 and angles_dif < 100:
+                        self.dif_angle_routes = 1
 
-                a = self.pos_a.location
-                b = self.pos_b.location
-                self.current_plan = self.grp.trace_route(a, b)
+                    a = self.pos_a.location
+                    b = self.pos_b.location
+                    self.current_plan = self.grp.trace_route(a, b)
+                    self.d2goal = self.total_distance(self.current_plan)
+
+
+                # self.current_plan = self.current_plan[:200]
                 self.d2goal = self.total_distance(self.current_plan)
 
+                self.transform = self.pos_a
 
-            # self.current_plan = self.current_plan[:200]
-            self.d2goal = self.total_distance(self.current_plan)
+            else:
+                self.current_plan = self.grp.trace_route(self.pos_a.location, self.pos_b.location)
+                # self.current_plan = self.current_plan[:200]
+                self.sssd2goal = self.total_distance(self.current_plan)
 
-            self.transform = self.pos_a
+                self.transform = self.pos_a
 
-        else:
-            self.current_plan = self.grp.trace_route(self.pos_a.location, self.pos_b.location)
-            # self.current_plan = self.current_plan[:200]
-            self.sssd2goal = self.total_distance(self.current_plan)
+            print(self.transform)
 
-            self.transform = self.pos_a
+            for i in range(len(self.current_plan)):
+                w1 = self.current_plan[i][0]
+                self.waypoints_current_plan.append([w1.transform.location.x, w1.transform.location.y, w1.transform.location.z,
+                     w1.transform.rotation.pitch, w1.transform.rotation.yaw, w1.transform.rotation.roll])
+            self.waypoints_current_plan.append([0, 0, 0, 0, 0, 0])
+            self.Target = w1.transform.location
+            ##################
 
-        print(self.transform)
-
-        for i in range(len(self.current_plan)):
-            w1 = self.current_plan[i][0]
-            self.waypoints_current_plan.append([w1.transform.location.x, w1.transform.location.y, w1.transform.location.z,
-                 w1.transform.rotation.pitch, w1.transform.rotation.yaw, w1.transform.rotation.roll])
-        self.waypoints_current_plan.append([0, 0, 0, 0, 0, 0])
-        self.Target = w1.transform.location
-        ##################
-
-        # if settings.DRAW_TRAJECTORY == 1:
-        self.draw_path(self.world, self.current_plan, tl=settings.LINE_TIME)
-        #self.transform = random.choice(self.world.get_map().get_spawn_points())
-        self.model_3.set_attribute('role_name', 'yanxi')
-        self.vehicle = self.world.spawn_actor(self.model_3, self.transform)
+            # if settings.DRAW_TRAJECTORY == 1:
+            self.draw_path(self.world, self.current_plan, tl=settings.LINE_TIME)
+            #self.transform = random.choice(self.world.get_map().get_spawn_points())
+            self.model_3.set_attribute('role_name', 'yanxi')
+            self.vehicle = self.world.spawn_actor(self.model_3, self.transform)
+            break
+          except RuntimeError:
+            print("Spawn actor failed, retry...")
 
         self.actor_list.append(self.vehicle)
         self.rgb_cam = self.blueprint_library.find('sensor.camera.rgb')
@@ -388,13 +397,25 @@ class CarEnv:
         #
 
         #Action is applied like steerin while throttle is cte
-        throttle2apply = 0.5*float(1 - action[1]) # [-1, 1] -> [0, 1]
-        # throttle2apply = 0.125*float(action[1]) + 0.475
+        # throttle2apply = 0.5*float(1 - action[1]) # [-1, 1] -> [0, 1]
+        # throttle2apply = 0.0
+        # if action[1] < 0.9:
+        #   throttle2apply = 0.5*float(1 - action[1]) # [-1, 1] -> [0, 1]
+        ego_vel = self.vehicle.get_velocity()
+        speed = math.sqrt(ego_vel.x**2 + ego_vel.y**2 + ego_vel.z**2) # in m/s
+        acc = self.vehicle.get_acceleration()
+        acceleration = math.sqrt(acc.x ** 2 + acc.y ** 2 + acc.z ** 2)  # in m/s^2
+        # print("speed: ", speed, ", acceleration: ", acceleration)
+        if math.fabs(speed) < 0.005 and math.fabs(acceleration) < 0.2:
+          throttle2apply = 0.125*float(action[1]) + 0.475
+        else:
+          throttle2apply = 0.375*float(action[1]) + 0.475
         # throttle2apply = 0.15*float(action[1]) + 0.35
         steering2apply = float(action[0]/2)
         # brake2apply = 0.0
-        # if throttle2apply < 0.000:
-        #     brake2apply = 0.5*float(1 - action[2]) # [-1, 1] -> [0, 1]
+        # if action[1] >= 0.9:
+        #   brake2apply = 0.3*float(action[1] + 1)
+        #   brake2apply = 0.125*float(action[2]) + 0.475
         self.vehicle.apply_control(carla.VehicleControl(throttle=throttle2apply, steer=steering2apply))
 
         # v = self.vehicle.get_velocity()

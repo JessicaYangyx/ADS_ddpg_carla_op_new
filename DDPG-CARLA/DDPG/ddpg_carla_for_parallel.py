@@ -32,6 +32,16 @@ class DDPGTrainer:
     self.buffer = ReplayBuffer(settings.buffer_size)
     self.step = 0
 
+    # add tensorboard
+    current_time = time.strftime("%Y%m%d-%H%M%S")
+    self.train_log_dir = f'logs_new/logs_{settings.WORKING_MODE}/{settings.TRAIN_MODE}-{current_time}'
+    self.train_summary_writer = tf.summary.create_file_writer(self.train_log_dir)
+
+    # Track metrics
+    self.episode_rewards = []
+    self.episode_losses = []
+    self.episode_distances = []
+
   def setup_tensorflow(self):
     tf.keras.backend.clear_session()
     tf.config.experimental_run_functions_eagerly(True)
@@ -47,14 +57,14 @@ class DDPGTrainer:
       self.actor = ActorNetwork(
         tf_session=self.tf_session,
         state_size=settings.state_dim,
-        action_size=3,
+        action_size=2,
         tau=settings.tau,
         lr=settings.lra
       )
       self.critic = CriticNetwork(
         tf_session=self.tf_session,
         state_size=settings.state_dim,
-        action_size=3,
+        action_size=2,
         tau=settings.tau,
         lr=settings.lrc
       )
@@ -71,17 +81,19 @@ class DDPGTrainer:
       )
 
     try:
-      self.actor.model.load_weights(settings.actor_weights_file)
-      self.critic.model.load_weights(settings.critic_weights_file)
+      self.actor.model.load_weights(filepath=settings.actor_weights_file)
+      self.critic.model.load_weights(filepath=settings.critic_weights_file)
       print("Weights loaded successfully")
     except Exception as e:
       print(f"Weights loading failed: {str(e)}")
 
   def run(self, train_indicator):
     ep_rewards = []
+    current_time = time.strftime("%Y%m%d-%H%M%S")
     for episode in range(settings.episodes_num):
       print(f"Starting episode {episode}")
       lane_line_data = None
+      episode_loss = 0
       if not self.q.empty():
         lane_line_data = self.q.get_nowait()
         # print(f"Using lane data: {lane_line_data}")
@@ -137,7 +149,8 @@ class DDPGTrainer:
 
         # Train networks
         if train_indicator and len(self.buffer) > settings.batch_size:
-          self.train_step(loss)
+          step_loss = self.train_step(loss)
+          episode_loss += step_loss
 
         print("Episode %s - Step %s - Action %s - Reward %s" % (episode, step, action_predicted[0], reward))
         self.step += 1
@@ -148,11 +161,26 @@ class DDPGTrainer:
           break
 
       ep_rewards.append(total_reward)
+      avg_loss = episode_loss / (step + 1) if (step + 1) > 0 else 0
+      with self.train_summary_writer.as_default():
+        # log data of 1 episode
+        tf.summary.scalar('episode_reward', total_reward, step=episode)
+        tf.summary.scalar('episode_loss', avg_loss, step=episode)
+        tf.summary.scalar('episode_distance', self.env.distance_acum[-1], step=episode)
+        tf.summary.scalar('steps_per_episode', step, step=episode)
+
       if (episode > 0) and ((episode % AGGREGATE_STATS_EVERY == 0) or (episode == 1)):
+        # log data for each 10 episode
         average_reward = np.mean(ep_rewards[-AGGREGATE_STATS_EVERY:])
         min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
         max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
         average_dist = np.mean(self.env.distance_acum[-AGGREGATE_STATS_EVERY:])
+        with self.train_summary_writer.as_default():
+          tf.summary.scalar('average_reward_10_episodes', average_reward, step=episode)
+          tf.summary.scalar('min_reward_10_episodes', min_reward, step=episode)
+          tf.summary.scalar('max_reward_10_episodes', max_reward, step=episode)
+          tf.summary.scalar('average_dist_10_episodes', average_dist, step=episode)
+
         # tensorboard.update_stats(average_reward=average_reward, min_reward=min_reward, max_reward=max_reward,
         #                          distance=average_dist, loss=loss)
       if episode % 3 == 0 and train_indicator:
@@ -182,8 +210,8 @@ class DDPGTrainer:
       for actor_world in self.env.actor_list:
         actor_world.destroy()
 
-    self.actor.model.save_weights(settings.save_weights_path + str(settings.TRAIN_MODE) + "_actor.h5", overwrite=True)
-    self.critic.model.save_weights(settings.save_weights_path + str(settings.TRAIN_MODE) + "_critic.h5", overwrite=True)
+    self.actor.model.save_weights(settings.save_weights_path + str(current_time) + "_" + str(settings.TRAIN_MODE) + "_actor.h5", overwrite=True)
+    self.critic.model.save_weights(settings.save_weights_path + str(current_time) + "_" + str(settings.TRAIN_MODE) + "_critic.h5", overwrite=True)
 
 
   def train_step(self, loss):
@@ -203,7 +231,8 @@ class DDPGTrainer:
     y = rewards + settings.gamma * target_q.flatten() * (1 - dones)
 
     # Update critic
-    loss += self.critic.model.train_on_batch([states, actions], y)
+    critic_loss = self.critic.model.train_on_batch([states, actions], y)
+    loss += critic_loss
 
     # Update actor
     a_for_grad = self.actor.model.predict(states)
@@ -214,6 +243,11 @@ class DDPGTrainer:
     # Update target networks
     self.actor.train_target_model()
     self.critic.train_target_model()
+
+    with self.train_summary_writer.as_default():
+      tf.summary.scalar('critic_loss', critic_loss, step=self.step)
+
+    return critic_loss
 
 
 def start_bridge_process(q):
